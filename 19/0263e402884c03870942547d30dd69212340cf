@@ -1,0 +1,29 @@
+app.js
+  s_b181a263eadd44::t_61746e0c292c93 1-350
+index.html
+  s_b181a263eadd44::t_b9b21e7fb40310 1-91
+styles.css
+  s_b181a263eadd44::t_b9b21e7fb40310 1-116
+README.md
+  s_b181a263eadd44::t_f1c00432d89682 1-30
+assets/vendor/exifr-LICENSE.txt
+  s_b181a263eadd44::t_6860dd7cb874cc 1-21
+assets/vendor/exifr.js
+  s_b181a263eadd44::t_f3eca42e7662b0 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "190263e402884c03870942547d30dd69212340cf",
+  "prompts": {},
+  "sessions": {
+    "s_b181a263eadd44": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d8d0-9ff2-7d40-a058-4b9e5431df29",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "duanmo <duanmo@U-4N6X9TV7-2220.local>"
+    }
+  }
+}
