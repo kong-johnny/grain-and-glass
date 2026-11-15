@@ -27,7 +27,7 @@
   </header>
   <main>
     <section class="intro">
-      <div><h1>玻璃暗房<span>.</span></h1><p>为相机拍摄的照片加上毛玻璃边框和参数水印。</p></div>
+      <div><h1>玻璃暗房<span>.</span></h1><p>裁切、调色，为照片加上毛玻璃边框和相机水印。</p></div>
       <div class="upload-area">
         <button id="upload" class="button primary" type="button"><svg><use href="#icon-upload"/></svg> 选择照片</button>
         <input type="file" id="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden>
@@ -48,6 +48,65 @@
         <div class="preview-footer"><span><span class="indicator"></span><span id="source">示例照片</span></span><span id="dimensions">—</span></div>
       </section>
       <aside class="settings" aria-label="照片设置">
+        <details class="controls editing" open>
+          <summary>裁切</summary>
+          <div class="section-header edit-row">
+            <label for="crop-ratio">裁切比例</label>
+            <select id="crop-ratio">
+              <option value="free">原图比例</option>
+              <option value="1:1">1:1 方形</option>
+              <option value="4:5">4:5 竖幅</option>
+              <option value="3:4">3:4 竖幅</option>
+              <option value="2:3">2:3 竖幅</option>
+              <option value="3:2">3:2 横幅</option>
+              <option value="4:3">4:3 横幅</option>
+              <option value="16:9">16:9 宽幅</option>
+            </select>
+            <button id="crop-reset" class="button reset" type="button">重置</button>
+          </div>
+          <div class="ranges">
+            <label for="crop-zoom">放大裁切 <output id="crop-zoom-value" for="crop-zoom">100%</output></label>
+            <input id="crop-zoom" type="range" min="100" max="300" value="100">
+            <label for="crop-x">水平位置</label>
+            <input id="crop-x" type="range" min="0" max="100" value="50">
+            <label for="crop-y">垂直位置</label>
+            <input id="crop-y" type="range" min="0" max="100" value="50">
+          </div>
+        </details>
+        <details class="controls editing" open>
+          <summary>调色</summary>
+          <div class="section-header edit-row">
+            <label for="grade">调色预设</label>
+            <select id="grade">
+              <option value="none">原色</option>
+              <option value="chrome">低饱和纪实</option>
+              <option value="vivid">鲜艳风光</option>
+              <option value="portrait">柔和人像</option>
+              <option value="amber">暖调复古</option>
+              <option value="cinema">冷影暖光</option>
+              <option value="mono">高反差黑白</option>
+            </select>
+            <button id="grade-reset" class="button reset" type="button">重置</button>
+          </div>
+          <p id="grade-hint" class="hint">保持照片原有色调。</p>
+          <div class="ranges">
+            <label for="grade-strength">预设强度 <output id="grade-strength-value" for="grade-strength">100%</output></label>
+            <input id="grade-strength" type="range" min="0" max="100" value="100">
+          </div>
+          <details class="adjustments">
+            <summary>手动微调</summary>
+            <div class="ranges">
+              <label for="exposure">曝光 <output id="exposure-value" for="exposure">0 EV</output></label>
+              <input id="exposure" type="range" min="-1.5" max="1.5" value="0" step="0.1">
+              <label for="contrast">对比度 <output id="contrast-value" for="contrast">0</output></label>
+              <input id="contrast" type="range" min="-50" max="50" value="0">
+              <label for="saturation">饱和度 <output id="saturation-value" for="saturation">0</output></label>
+              <input id="saturation" type="range" min="-100" max="50" value="0">
+              <label for="warmth">冷暖 <output id="warmth-value" for="warmth">0</output></label>
+              <input id="warmth" type="range" min="-50" max="50" value="0">
+            </div>
+          </details>
+        </details>
         <section class="controls">
           <div class="section-header"><h2><svg><use href="#icon-sliders"/></svg> 边框样式</h2><button id="reset" class="button reset" type="button" title="恢复边框默认值"><svg><use href="#icon-reset"/></svg> 重置</button></div>
           <fieldset class="presets">

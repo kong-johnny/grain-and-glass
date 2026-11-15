@@ -15,6 +15,17 @@ const presets = {
   paper: { margin: 6, blur: 0, radius: 0 },
   night: { margin: 9, blur: 75, radius: 2 },
 };
+const cropDefaults = { "crop-ratio": "free", "crop-zoom": 100, "crop-x": 50, "crop-y": 50 };
+const gradeDefaults = { grade: "none", "grade-strength": 100, exposure: 0, contrast: 0, saturation: 0, warmth: 0 };
+const grades = {
+  none: { hint: "保持照片原有色调。" },
+  chrome: { hint: "压低饱和度，暗部略偏冷，适合街拍与纪实。", saturation: -0.27, contrast: 0.14, shadows: -0.13, highlights: 0.03 },
+  vivid: { hint: "加强色彩与反差，适合山水、天空和植物。", saturation: 0.32, contrast: 0.15 },
+  portrait: { hint: "柔化反差，稍提中间调，适合人像。", exposure: 0.15, saturation: -0.12, contrast: -0.15, highlights: 0.07 },
+  amber: { hint: "抬起暗部，添一点琥珀色，适合日常和逆光。", saturation: -0.16, contrast: -0.18, shadows: 0.10, highlights: 0.22 },
+  cinema: { hint: "暗部偏青，亮部偏暖，适合城市与夜景。", saturation: -0.14, contrast: 0.13, shadows: -0.29, highlights: 0.19 },
+  mono: { hint: "去掉色彩并拉开明暗，适合光影和建筑。", saturation: -1, contrast: 0.25 },
+};
 // Bound allocation for browsers with low Canvas area limits.
 const MAX_PIXELS = 16_000_000;
 const MAX_SIDE = 8192;
@@ -40,6 +51,11 @@ function selectedPreset() {
 function options() {
   return {
     preset: selectedPreset(),
+    cropRatio: byId("crop-ratio").value,
+    zoom: Number(byId("crop-zoom").value) / 100,
+    cropX: Number(byId("crop-x").value) / 100,
+    cropY: Number(byId("crop-y").value) / 100,
+    grade: colorSettings(),
     margin: Number(margin.value) / 100,
     blur: Number(blur.value) / 100,
     radius: Number(radius.value) / 100,
@@ -47,11 +63,72 @@ function options() {
   };
 }
 
-function layout(image, settings) {
-  const width = image.naturalWidth;
-  const height = image.naturalHeight;
+function cropBox(image, settings) {
+  const fullWidth = image.naturalWidth;
+  const fullHeight = image.naturalHeight;
+  const [ratioWidth, ratioHeight] = settings.cropRatio === "free"
+    ? [fullWidth, fullHeight]
+    : settings.cropRatio.split(":").map(Number);
+  const ratio = ratioWidth / ratioHeight;
+  const width = Math.max(1, Math.round(Math.min(fullWidth, fullHeight * ratio) / settings.zoom));
+  const height = Math.max(1, Math.round(Math.min(fullHeight, fullWidth / ratio) / settings.zoom));
+  return {
+    width, height,
+    x: Math.round((fullWidth - width) * settings.cropX),
+    y: Math.round((fullHeight - height) * settings.cropY),
+  };
+}
+
+function colorSettings() {
+  const preset = grades[byId("grade").value];
+  const strength = Number(byId("grade-strength").value) / 100;
+  return {
+    exposure: Number(byId("exposure").value) + (preset.exposure || 0) * strength,
+    contrast: Number(byId("contrast").value) / 100 + (preset.contrast || 0) * strength,
+    saturation: Math.max(-1, Number(byId("saturation").value) / 100 + (preset.saturation || 0) * strength),
+    warmth: Number(byId("warmth").value) / 100,
+    shadows: (preset.shadows || 0) * strength,
+    highlights: (preset.highlights || 0) * strength,
+  };
+}
+
+function gradePixels(ctx, width, height, grade) {
+  const exposure = 2 ** grade.exposure;
+  const saturation = 1 + grade.saturation;
+  const tone = Float32Array.from({ length: 256 }, (_, value) => {
+    const level = value / 255;
+    const linear = level <= 0.04045 ? level / 12.92 : ((level + 0.055) / 1.055) ** 2.4;
+    const adjusted = Math.min(1, linear * exposure);
+    const exposed = adjusted <= 0.0031308 ? adjusted * 12.92 : 1.055 * adjusted ** (1 / 2.4) - 0.055;
+    return 255 * (exposed + grade.contrast * (exposed - 0.5) * (1 - 4 * (exposed - 0.5) ** 2) * 2);
+  });
+  const tint = Float32Array.from({ length: 256 }, (_, value) => {
+    const level = value / 255;
+    return 90 * (grade.warmth * 4 * level * (1 - level)
+      + grade.shadows * (1 - level) ** 2 + grade.highlights * level ** 2);
+  });
+  // Process strips to bound pixel readback memory on mobile.
+  for (let y = 0; y < height; y += 128) {
+    const strip = ctx.getImageData(0, y, width, Math.min(128, height - y));
+    const pixels = strip.data;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const r = tone[pixels[i]];
+      const g = tone[pixels[i + 1]];
+      const b = tone[pixels[i + 2]];
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const shift = tint[Math.round(luma)];
+      pixels[i] = luma + (r - luma) * saturation + shift;
+      pixels[i + 1] = luma + (g - luma) * saturation - shift * 0.18;
+      pixels[i + 2] = luma + (b - luma) * saturation - shift;
+    }
+    ctx.putImageData(strip, 0, y);
+  }
+}
+
+function layout(crop, settings) {
+  const { width, height } = crop;
   const short = Math.min(width, height);
-  const border = short * settings.margin;
+  const border = Math.round(short * settings.margin);
   const type = short * 0.027;
   const textHeight = settings.lines.length ? type * (settings.lines.length * 1.23 + 0.55) : 0;
   return { width, height, border, type, textHeight };
@@ -61,14 +138,14 @@ function fitScale(width, height, maxSide) {
   return Math.min(1, maxSide / Math.max(width, height), Math.sqrt(MAX_PIXELS / (width * height)));
 }
 
-function cover(ctx, image, width, height, extra = 0) {
-  const scale = Math.max((width + extra) / image.naturalWidth, (height + extra) / image.naturalHeight);
-  const w = image.naturalWidth * scale;
-  const h = image.naturalHeight * scale;
-  ctx.drawImage(image, (width - w) / 2, (height - h) / 2, w, h);
+function cover(ctx, image, crop, width, height, extra = 0) {
+  const scale = Math.max((width + extra) / crop.width, (height + extra) / crop.height);
+  const w = crop.width * scale;
+  const h = crop.height * scale;
+  ctx.drawImage(image, crop.x, crop.y, crop.width, crop.height, (width - w) / 2, (height - h) / 2, w, h);
 }
 
-function background(ctx, image, width, height, settings) {
+function background(ctx, image, crop, width, height, settings) {
   const paper = settings.preset === "paper";
   const night = settings.preset === "night";
   ctx.fillStyle = paper ? "#f6f3ec" : "#17231d";
@@ -87,7 +164,7 @@ function background(ctx, image, width, height, settings) {
   const smallCtx = soft.getContext("2d");
   const amount = Math.min(soft.width, soft.height) * settings.blur * 0.105;
   if (supportsFilter) smallCtx.filter = `blur(${amount}px)`;
-  cover(smallCtx, image, soft.width, soft.height, 6 * amount);
+  cover(smallCtx, image, crop, soft.width, soft.height, 6 * amount);
   ctx.drawImage(soft, 0, 0, width, height);
 
   const glaze = ctx.createLinearGradient(0, 0, 0, height);
@@ -98,7 +175,10 @@ function background(ctx, image, width, height, settings) {
 }
 
 function render(canvas, image, settings, maxSide, showOriginal = false) {
-  const source = layout(image, settings);
+  const crop = cropBox(image, settings);
+  const source = showOriginal
+    ? { width: image.naturalWidth, height: image.naturalHeight }
+    : layout(crop, settings);
   const width = source.width + (showOriginal ? 0 : 2 * source.border);
   const height = source.height + (showOriginal ? 0 : 2 * source.border + source.textHeight);
   const scale = fitScale(width, height, maxSide);
@@ -111,9 +191,21 @@ function render(canvas, image, settings, maxSide, showOriginal = false) {
     return;
   }
 
+  let foreground = image;
+  let region = crop;
+  if (Object.values(settings.grade).some(Boolean)) {
+    foreground = document.createElement("canvas");
+    foreground.width = Math.max(1, Math.round(crop.width * scale));
+    foreground.height = Math.max(1, Math.round(crop.height * scale));
+    const pixels = foreground.getContext("2d", { willReadFrequently: true });
+    pixels.imageSmoothingQuality = "high";
+    pixels.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, foreground.width, foreground.height);
+    gradePixels(pixels, foreground.width, foreground.height, settings.grade);
+    region = { x: 0, y: 0, width: foreground.width, height: foreground.height };
+  }
   ctx.scale(canvas.width / width, canvas.height / height);
   ctx.imageSmoothingQuality = "high";
-  background(ctx, image, width, height, settings);
+  background(ctx, foreground, region, width, height, settings);
   const { border, type } = source;
   const rounding = Math.min(source.width, source.height) * settings.radius;
   ctx.beginPath();
@@ -126,7 +218,9 @@ function render(canvas, image, settings, maxSide, showOriginal = false) {
   ctx.fill();
   ctx.shadowColor = "transparent";
   ctx.clip();
-  ctx.drawImage(image, border, border, source.width, source.height);
+  ctx.drawImage(foreground, region.x, region.y, region.width, region.height,
+    border, border, source.width, source.height);
+  if (foreground !== image) foreground.width = 1;
   ctx.restore();
   if (settings.preset !== "paper") {
     ctx.strokeStyle = "#ffffff62";
@@ -150,7 +244,19 @@ function outputLimit() {
   return byId("size").value === "original" ? MAX_SIDE : Number(byId("size").value);
 }
 
+function resetControls(defaults) {
+  Object.entries(defaults).forEach(([id, value]) => { byId(id).value = value; });
+}
+
 function refresh() {
+  byId("crop-zoom-value").value = `${byId("crop-zoom").value}%`;
+  byId("grade-strength-value").value = `${byId("grade-strength").value}%`;
+  byId("grade-strength").disabled = byId("grade").value === "none";
+  byId("grade-hint").textContent = grades[byId("grade").value].hint;
+  for (const id of ["exposure", "contrast", "saturation", "warmth"]) {
+    const value = byId(id).value;
+    byId(`${id}-value`).value = `${value > 0 ? "+" : ""}${value}${id === "exposure" ? " EV" : ""}`;
+  }
   byId("margin-value").value = `${margin.value}%`;
   byId("blur-value").value = `${blur.value}%`;
   byId("radius-value").value = `${radius.value}%`;
@@ -165,12 +271,15 @@ function refresh() {
   cancelAnimationFrame(previewRequest);
   previewRequest = requestAnimationFrame(() => {
     const settings = options();
+    const crop = cropBox(photo, settings);
+    byId("crop-x").disabled = crop.width === photo.naturalWidth;
+    byId("crop-y").disabled = crop.height === photo.naturalHeight;
     render(preview, photo, settings, 1400, original);
     byId("stage-message").hidden = true;
     preview.hidden = false;
-    const { width, height, border, textHeight } = layout(photo, settings);
-    const w = original ? width : width + 2 * border;
-    const h = original ? height : height + 2 * border + textHeight;
+    const { width, height, border, textHeight } = layout(crop, settings);
+    const w = original ? photo.naturalWidth : width + 2 * border;
+    const h = original ? photo.naturalHeight : height + 2 * border + textHeight;
     const scale = original ? 1 : fitScale(w, h, outputLimit());
     byId("dimensions").textContent = `${original ? "原图" : "导出"} ${Math.max(1, Math.floor(w * scale))} × ${Math.max(1, Math.floor(h * scale))} px`;
   });
@@ -245,6 +354,7 @@ async function loadPhoto(file) {
     if (request !== loadRequest) return;
 
     photo = image;
+    resetControls(cropDefaults);
     filename = file ? file.name : "示例照片";
     original = false;
     fields.forEach((id) => {
@@ -298,7 +408,7 @@ async function exportPhoto() {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
 
-    const { width, height, border, textHeight } = layout(source, settings);
+    const { width, height, border, textHeight } = layout(cropBox(source, settings), settings);
     const scaled = keepSource && fitScale(width + 2 * border, height + 2 * border + textHeight, limit) < 1;
     notify(scaled ? "已生成下载。超大照片已缩小至浏览器可导出的尺寸。" : "已生成下载。");
   } catch {
@@ -335,6 +445,22 @@ window.addEventListener("drop", (event) => {
 document.querySelectorAll('input[name="preset"]').forEach((input) => input.addEventListener("change", applyPreset));
 [margin, blur, radius, watermark, byId("size"), ...fields.map(byId)].forEach((element) => {
   element.addEventListener("input", refresh);
+});
+function editPhoto() {
+  original = false;
+  refresh();
+}
+
+for (const id of [...Object.keys(cropDefaults), ...Object.keys(gradeDefaults)]) {
+  byId(id).addEventListener("input", editPhoto);
+}
+byId("crop-reset").addEventListener("click", () => {
+  resetControls(cropDefaults);
+  editPhoto();
+});
+byId("grade-reset").addEventListener("click", () => {
+  resetControls(gradeDefaults);
+  editPhoto();
 });
 byId("reset").addEventListener("click", () => {
   document.querySelector('input[value="glass"]').checked = true;
