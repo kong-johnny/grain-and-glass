@@ -116,7 +116,8 @@ select { padding: 0 6px; font-size: 12px; }
 .preview { position: sticky; top: 12px; }
 .editing { border-bottom: 1px solid var(--line); }
 #crop-hint { margin: 3px 0 0; }
-#crop-hint:empty { display: none; }
+.stage canvas.crop-movable { cursor: grab; touch-action: none; }
+.stage canvas.crop-dragging { cursor: grabbing; }
 .editing > summary { cursor: pointer; font-weight: 700; }
 .edit-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; margin: 10px 0; }
 .edit-row label, .adjustments summary { color: #404738; font-size: 12px; font-weight: 600; }

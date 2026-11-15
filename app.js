@@ -15,7 +15,7 @@ const presets = {
   paper: { margin: 6, blur: 0, radius: 0 },
   night: { margin: 9, blur: 75, radius: 2 },
 };
-const cropDefaults = { "crop-ratio": "free", "crop-zoom": 100, "crop-x": 50, "crop-y": 50 };
+const cropDefaults = { "crop-ratio": "free", "crop-zoom": 100 };
 const gradeDefaults = { grade: "none", "grade-strength": 100, exposure: 0, contrast: 0, saturation: 0, warmth: 0 };
 const grades = {
   none: { hint: "选一个调色预设后，可调整预设强度。原色也可手动微调。" },
@@ -37,6 +37,8 @@ let loadRequest = 0;
 let loading = false;
 let exporting = false;
 let previewRequest;
+let cropPosition = { x: 0.5, y: 0.5 };
+let cropDrag;
 
 function notify(message, error = false) {
   const status = byId("status");
@@ -53,8 +55,8 @@ function options() {
     preset: selectedPreset(),
     cropRatio: byId("crop-ratio").value,
     zoom: Number(byId("crop-zoom").value) / 100,
-    cropX: Number(byId("crop-x").value) / 100,
-    cropY: Number(byId("crop-y").value) / 100,
+    cropX: cropPosition.x,
+    cropY: cropPosition.y,
     grade: colorSettings(),
     margin: Number(margin.value) / 100,
     blur: Number(blur.value) / 100,
@@ -249,9 +251,7 @@ function resetControls(defaults) {
 }
 
 function refresh() {
-  for (const id of ["crop-zoom", "crop-x", "crop-y"]) {
-    byId(`${id}-value`).value = `${byId(id).value}%`;
-  }
+  byId("crop-zoom-value").value = `${byId("crop-zoom").value}%`;
   byId("grade-strength-value").value = `${byId("grade-strength").value}%`;
   byId("grade-strength").disabled = byId("grade").value === "none";
   byId("grade-hint").textContent = grades[byId("grade").value].hint;
@@ -274,12 +274,12 @@ function refresh() {
   previewRequest = requestAnimationFrame(() => {
     const settings = options();
     const crop = cropBox(photo, settings);
-    byId("crop-x").disabled = crop.width === photo.naturalWidth;
-    byId("crop-y").disabled = crop.height === photo.naturalHeight;
-    const lockedDirections = [byId("crop-x").disabled && "水平", byId("crop-y").disabled && "垂直"].filter(Boolean);
-    const cropHint = lockedDirections.length
-      ? `${lockedDirections.join("和")}方向已占满原图。放大裁切后可以移动。`
-      : "";
+    const movable = !original && !loading && (crop.width < photo.naturalWidth || crop.height < photo.naturalHeight);
+    preview.classList.toggle("crop-movable", movable);
+    preview.tabIndex = movable ? 0 : -1;
+    const cropHint = original ? "切回成图即可调整裁切位置。" : movable
+      ? "直接拖动预览中的照片调整构图，也可用方向键。"
+      : "放大照片或换一个裁切比例，即可在预览中拖动。";
     if (byId("crop-hint").textContent !== cropHint) byId("crop-hint").textContent = cropHint;
     render(preview, photo, settings, 1400, original);
     byId("stage-message").hidden = true;
@@ -341,6 +341,7 @@ async function readExif(file) {
 }
 
 async function loadPhoto(file) {
+  endCropDrag();
   const request = ++loadRequest;
   loading = true;
   refresh();
@@ -361,7 +362,7 @@ async function loadPhoto(file) {
     if (request !== loadRequest) return;
 
     photo = image;
-    resetControls(cropDefaults);
+    resetCrop();
     filename = file ? file.name : "示例照片";
     original = false;
     fields.forEach((id) => {
@@ -453,7 +454,65 @@ document.querySelectorAll('input[name="preset"]').forEach((input) => input.addEv
 [margin, blur, radius, watermark, byId("size"), ...fields.map(byId)].forEach((element) => {
   element.addEventListener("input", refresh);
 });
+function resetCrop() {
+  resetControls(cropDefaults);
+  cropPosition = { x: 0.5, y: 0.5 };
+}
+
+function positionCrop(crop, x, y) {
+  const maxX = photo.naturalWidth - crop.width;
+  const maxY = photo.naturalHeight - crop.height;
+  if (maxX) cropPosition.x = Math.max(0, Math.min(1, x / maxX));
+  if (maxY) cropPosition.y = Math.max(0, Math.min(1, y / maxY));
+  refresh();
+}
+
+function endCropDrag() {
+  if (!cropDrag) return;
+  const { pointerId } = cropDrag;
+  cropDrag = undefined;
+  preview.classList.remove("crop-dragging");
+  if (preview.hasPointerCapture(pointerId)) preview.releasePointerCapture(pointerId);
+}
+
+preview.addEventListener("pointerdown", (event) => {
+  if (!photo || loading || original || cropDrag || !event.isPrimary || event.button !== 0) return;
+  const settings = options();
+  const crop = cropBox(photo, settings);
+  if (crop.width === photo.naturalWidth && crop.height === photo.naturalHeight) return;
+
+  const frame = layout(crop, settings);
+  const rect = preview.getBoundingClientRect();
+  cropDrag = {
+    pointerId: event.pointerId, crop, startX: event.clientX, startY: event.clientY,
+    scaleX: (frame.width + 2 * frame.border) / rect.width,
+    scaleY: (frame.height + 2 * frame.border + frame.textHeight) / rect.height,
+  };
+  preview.setPointerCapture(event.pointerId);
+  preview.classList.add("crop-dragging");
+});
+preview.addEventListener("pointermove", (event) => {
+  if (event.pointerId !== cropDrag?.pointerId) return;
+  const { crop, startX, startY, scaleX, scaleY } = cropDrag;
+  positionCrop(crop, crop.x - (event.clientX - startX) * scaleX, crop.y - (event.clientY - startY) * scaleY);
+});
+for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  preview.addEventListener(type, (event) => {
+    if (event.pointerId === cropDrag?.pointerId) endCropDrag();
+  });
+}
+preview.addEventListener("keydown", (event) => {
+  const directions = { ArrowLeft: [1, 0], ArrowRight: [-1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+  const direction = directions[event.key];
+  if (!Array.isArray(direction) || !photo || loading || original || !preview.classList.contains("crop-movable")) return;
+  event.preventDefault();
+  const crop = cropBox(photo, options());
+  const step = Math.max(1, Math.round(Math.min(crop.width, crop.height) * (event.shiftKey ? 0.1 : 0.02)));
+  positionCrop(crop, crop.x + direction[0] * step, crop.y + direction[1] * step);
+});
+
 function editPhoto() {
+  endCropDrag();
   original = false;
   refresh();
 }
@@ -462,7 +521,7 @@ for (const id of [...Object.keys(cropDefaults), ...Object.keys(gradeDefaults)]) 
   byId(id).addEventListener("input", editPhoto);
 }
 byId("crop-reset").addEventListener("click", () => {
-  resetControls(cropDefaults);
+  resetCrop();
   editPhoto();
 });
 byId("grade-reset").addEventListener("click", () => {
@@ -474,6 +533,7 @@ byId("reset").addEventListener("click", () => {
   applyPreset();
 });
 compare.addEventListener("click", () => {
+  endCropDrag();
   original = !original;
   refresh();
 });
