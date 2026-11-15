@@ -6,9 +6,9 @@
   <meta name="description" content="在浏览器里为照片添加毛玻璃边框和相机参数水印。">
   <meta name="theme-color" content="#f4f3ed">
   <title>玻璃暗房 · Grain & Glass</title>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=3">
   <script defer src="./assets/vendor/exifr.js"></script>
-  <script defer src="./app.js"></script>
+  <script defer src="./app.js?v=3"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -67,11 +67,12 @@
           <div class="ranges">
             <label for="crop-zoom">放大裁切 <output id="crop-zoom-value" for="crop-zoom">100%</output></label>
             <input id="crop-zoom" type="range" min="100" max="300" value="100">
-            <label for="crop-x">水平位置</label>
+            <label for="crop-x">水平位置 <output id="crop-x-value" for="crop-x">50%</output></label>
             <input id="crop-x" type="range" min="0" max="100" value="50">
-            <label for="crop-y">垂直位置</label>
+            <label for="crop-y">垂直位置 <output id="crop-y-value" for="crop-y">50%</output></label>
             <input id="crop-y" type="range" min="0" max="100" value="50">
           </div>
+          <p id="crop-hint" class="hint" aria-live="polite" aria-atomic="true"></p>
         </details>
         <details class="controls editing" open>
           <summary>调色</summary>
@@ -88,7 +89,7 @@
             </select>
             <button id="grade-reset" class="button reset" type="button">重置</button>
           </div>
-          <p id="grade-hint" class="hint">保持照片原有色调。</p>
+          <p id="grade-hint" class="hint">选一个调色预设后，可调整预设强度。</p>
           <div class="ranges">
             <label for="grade-strength">预设强度 <output id="grade-strength-value" for="grade-strength">100%</output></label>
             <input id="grade-strength" type="range" min="0" max="100" value="100">

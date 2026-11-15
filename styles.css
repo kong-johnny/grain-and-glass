@@ -115,6 +115,8 @@ select { padding: 0 6px; font-size: 12px; }
 
 .preview { position: sticky; top: 12px; }
 .editing { border-bottom: 1px solid var(--line); }
+#crop-hint { margin: 3px 0 0; }
+#crop-hint:empty { display: none; }
 .editing > summary { cursor: pointer; font-weight: 700; }
 .edit-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; margin: 10px 0; }
 .edit-row label, .adjustments summary { color: #404738; font-size: 12px; font-weight: 600; }
@@ -123,5 +125,7 @@ select { padding: 0 6px; font-size: 12px; }
 @media (max-width: 700px) {
   .preview { top: 0; z-index: 1; }
   .stage { min-height: 145px; padding: 10px; }
-  .stage canvas { max-height: 29svh; }
+  .stage canvas { max-height: 27svh; }
+  .settings :is(button, input, select, summary) { scroll-margin-top: calc(27svh + 140px); }
+  .settings input[type="range"] { height: 25px; touch-action: pan-y; }
 }

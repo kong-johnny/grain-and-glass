@@ -18,7 +18,7 @@ const presets = {
 const cropDefaults = { "crop-ratio": "free", "crop-zoom": 100, "crop-x": 50, "crop-y": 50 };
 const gradeDefaults = { grade: "none", "grade-strength": 100, exposure: 0, contrast: 0, saturation: 0, warmth: 0 };
 const grades = {
-  none: { hint: "保持照片原有色调。" },
+  none: { hint: "选一个调色预设后，可调整预设强度。原色也可手动微调。" },
   chrome: { hint: "压低饱和度，暗部略偏冷，适合街拍与纪实。", saturation: -0.27, contrast: 0.14, shadows: -0.13, highlights: 0.03 },
   vivid: { hint: "加强色彩与反差，适合山水、天空和植物。", saturation: 0.32, contrast: 0.15 },
   portrait: { hint: "柔化反差，稍提中间调，适合人像。", exposure: 0.15, saturation: -0.12, contrast: -0.15, highlights: 0.07 },
@@ -249,7 +249,9 @@ function resetControls(defaults) {
 }
 
 function refresh() {
-  byId("crop-zoom-value").value = `${byId("crop-zoom").value}%`;
+  for (const id of ["crop-zoom", "crop-x", "crop-y"]) {
+    byId(`${id}-value`).value = `${byId(id).value}%`;
+  }
   byId("grade-strength-value").value = `${byId("grade-strength").value}%`;
   byId("grade-strength").disabled = byId("grade").value === "none";
   byId("grade-hint").textContent = grades[byId("grade").value].hint;
@@ -274,6 +276,11 @@ function refresh() {
     const crop = cropBox(photo, settings);
     byId("crop-x").disabled = crop.width === photo.naturalWidth;
     byId("crop-y").disabled = crop.height === photo.naturalHeight;
+    const lockedDirections = [byId("crop-x").disabled && "水平", byId("crop-y").disabled && "垂直"].filter(Boolean);
+    const cropHint = lockedDirections.length
+      ? `${lockedDirections.join("和")}方向已占满原图。放大裁切后可以移动。`
+      : "";
+    if (byId("crop-hint").textContent !== cropHint) byId("crop-hint").textContent = cropHint;
     render(preview, photo, settings, 1400, original);
     byId("stage-message").hidden = true;
     preview.hidden = false;
