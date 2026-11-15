@@ -1,0 +1,23 @@
+index.html
+  s_b181a263eadd44::t_915e002141a274 9,11,70,72,75,92
+styles.css
+  s_b181a263eadd44::t_915e002141a274 118-119,128-130
+app.js
+  s_b181a263eadd44::t_915e002141a274 21,252-254,279-283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "74b969971a0189632d6a7c4c84effdfb43ca3578",
+  "prompts": {},
+  "sessions": {
+    "s_b181a263eadd44": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d8d0-9ff2-7d40-a058-4b9e5431df29",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "duanmo <duanmo@U-4N6X9TV7-2220.local>"
+    }
+  }
+}
